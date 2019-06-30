@@ -44,6 +44,10 @@ TNoFolha * particiona_folha(int d, TNoFolha *antiga){
 
 }
 
+TNoInterno * particiona_no_interno(int d, TNoInterno *antiga){
+
+}
+
 void sort_no_interno(int d, TNoInterno *node){
     int min;
     int aux;
@@ -148,7 +152,7 @@ int insere(int cod, char *nome, char *categoria, float preco, char *nome_arquivo
     fseek(dados_file, folha_ptr, SEEK_SET);
     TNoFolha* folha_node = le_no_folha(d, dados_file);
 
-    int inserido_ptr;
+    int inserido_ptr = 0;
     int taNaArvore = 0;
     for (int i=0; i<folha_node->m; i++){
         if (folha_node->pizzas[i]->cod==cod) taNaArvore=1;
@@ -189,45 +193,103 @@ int insere(int cod, char *nome, char *categoria, float preco, char *nome_arquivo
             //subscreve o no antigo
             fseek(dados_file, folha_ptr, SEEK_SET);
             salva_no_folha(d, folha_node, dados_file);
-
+            int tanonovo = 0;
+            for (int i = 0; i < novoNo->m; i++) {
+                if (novoNo->pizzas[i]->cod == cod) {
+                    tanonovo = 1;
+                    break;
+                }
+            }
 
             //se o primeiro nó continuar sendo a chave, cria uma nova chave para inserir no no interno
             fseek(indice_file, folha_node->pont_pai, SEEK_SET);
             TNoInterno *in_node = le_no_interno(d, indice_file);
             //se o no nao estiver cheio
-            if (folha_node->pont_pai != -1) {
-                if (in_node->m < 2 * d) {
-                    //se o primeiro no da folha nao tiver mudado
-                    if (folha_node->pizzas[0]->cod == cod_indice) {
+            if (!meta->raiz_folha) {
+                if (folha_node->pizzas[0]->cod == cod_indice) {
+                    in_node->chaves[in_node->m] = novoNo->pizzas[0]->cod;
+                    in_node->p[in_node->m + 1] = pont_new;
+                    in_node->m += 1;
+                    sort_no_interno(d, in_node);
+                }
+                else{
+                    for (int i=0; i< in_node->m; i++){
+                        if (in_node->chaves[i] == cod_indice){
+                            in_node->chaves[i]= folha_node->pizzas[0]->cod;
+                        }
                         in_node->chaves[in_node->m] = novoNo->pizzas[0]->cod;
                         in_node->p[in_node->m + 1] = pont_new;
-                        in_node->m+=1;
+                        in_node->m += 1;
                         sort_no_interno(d, in_node);
-
-                        int tanonovo = 0;
-                        for (int i = 0; i < novoNo->m; i++) {
-                            if (novoNo->pizzas[i]->cod == cod) {
-                                tanonovo = 1;
-                                break;
-                            }
-                        }
-                        if (tanonovo) inserido_ptr = pont_new;
-                        else inserido_ptr = folha_ptr;
-
-                        //atualiza os indices
-                        fseek(indice_file, folha_node->pont_pai, SEEK_SET);
-                        salva_no_interno(d, in_node, indice_file);
-
-                        //atualiza os metadados
-                        fseek(dados_file, 0, SEEK_END);
-                        meta->pont_prox_no_folha_livre = ftell(dados_file);
-                        fseek(metadados_file, 0, SEEK_SET);
-                        salva_metadados(meta, metadados_file);
                     }
                 }
+                if (in_node->m <= 2 * d) {//se nao precisar particionar o no interno
+                    //se o primeiro no da folha nao tiver mudado
+
+                    if (tanonovo) inserido_ptr = pont_new;
+                    else inserido_ptr = folha_ptr;
+                        //atualiza os indices
+                     fseek(indice_file, folha_node->pont_pai, SEEK_SET);
+                     salva_no_interno(d, in_node, indice_file);
+                     //atualiza os metadados
+                     fseek(dados_file, 0, SEEK_END);
+                     meta->pont_prox_no_folha_livre = ftell(dados_file);
+                     fseek(metadados_file, 0, SEEK_SET);
+                     salva_metadados(meta, metadados_file);
+                    }
+                else{// se for necessario particionar nós internos
+                    while(in_node->m==2 * d && in_node->pont_pai!=-1){
+                        TNoInterno *novoNoInterno;
+                        novoNoInterno = particiona_no_interno(d, in_node);
+
+                    }
+                }
+                }
+            else{
+                in_node = no_interno_vazio(d);
+                in_node->pont_pai = -1; //vai apontar pra raiz
+                //1 indice apenas
+                in_node->m = 1;
+                //pont_pai = -1 ja q ele vai ser a raiz
+                in_node->pont_pai = -1;
+                in_node->aponta_folha = 1;
+                in_node->p[0] = folha_ptr;
+                in_node->p[1] = pont_new;
+                in_node->chaves[0] = novoNo->pizzas[0]->cod;
+                //escrever no final do arquivo e pegar o ponteiro
+                fseek(indice_file, 0, SEEK_END);
+                int root_ptr = ftell(indice_file);
+                salva_no_interno(d, in_node, indice_file);
+                meta->raiz_folha = 0;
+                meta->pont_raiz = root_ptr;
+
+                folha_node->pont_pai = root_ptr;
+                novoNo->pont_pai = root_ptr;
+
+                fseek(dados_file, folha_node->pont_prox, SEEK_SET);
+                salva_no_folha(d, novoNo, dados_file);
+                //subscreve o no antigo
+                fseek(dados_file, folha_ptr, SEEK_SET);
+                salva_no_folha(d, folha_node, dados_file);
+
+
+                fseek(indice_file, 0, SEEK_END);
+                meta->pont_prox_no_interno_livre = ftell(indice_file);
+                fseek(dados_file, 0, SEEK_END);
+                meta->pont_prox_no_folha_livre = ftell(dados_file);
+
+                //reescrever metadados
+                fseek(metadados_file, 0, SEEK_SET);
+                salva_metadados(meta, metadados_file);
+
+                }
+
+
+
+
             }
         }
-        /*
+                /*
         int new_size = d+1;
         TNoFolha* nova_folha_node = cria_no_folha(d, folha_node->pont_pai, folha_node->pont_prox, new_size, nova_pizza);
 
@@ -310,7 +372,7 @@ int insere(int cod, char *nome, char *categoria, float preco, char *nome_arquivo
         fclose(metadados_file);
         return inserido_ptr;
     }
-}
+
 
 int exclui(int cod, char *nome_arquivo_metadados, char *nome_arquivo_indice, char *nome_arquivo_dados, int d)
 {
