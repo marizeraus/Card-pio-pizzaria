@@ -544,7 +544,8 @@ BEGIN_TESTS();
                                                     )
         );
         TListaNosFolhas *tabDadosSaida = le_nos_folhas(D, NOME_ARQUIVO_DADOS);
-
+        printf("\n");
+        printf("\n");
         ASSERT_EQUAL_CMP(D, tabDados, tabDadosSaida, cmp_nos_folhas);
         libera_nos_folhas(D, tabDados);
         libera_nos_folhas(D, tabDadosSaida);
@@ -774,7 +775,6 @@ BEGIN_TESTS();
                                                     )
         );
         TListaNosFolhas *tabDadosSaida = le_nos_folhas(D, NOME_ARQUIVO_DADOS);
-        imprime_nos_folhas(D, tabDadosSaida);
         ASSERT_EQUAL_CMP(D, tabDados, tabDadosSaida, cmp_nos_folhas);
         libera_nos_folhas(D, tabDados);
         libera_nos_folhas(D, tabDadosSaida);

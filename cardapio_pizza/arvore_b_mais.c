@@ -11,8 +11,8 @@
 #include "no_folha.h"
 #include "no_interno.h"
 
-
-void sort_no(TNoFolha *noFolha){
+//funcoes auxiliares
+void sort_no_folha(TNoFolha *noFolha){
     int min;
     TPizza *aux;
     for (int i=0; i< noFolha->m-1; i++){
@@ -31,6 +31,44 @@ void sort_no(TNoFolha *noFolha){
 }
 
 
+TNoFolha * particiona_folha(int d, TNoFolha *antiga){
+    TNoFolha *novo = no_folha(d, d+1, antiga->pont_pai, antiga->pont_prox);
+    int pos=0;
+    for (int i=d; i<antiga->m; i++){
+        novo->pizzas[pos] = antiga->pizzas[i];
+        antiga->pizzas[i]=NULL;
+        pos++;
+    }
+    antiga->m = d;
+    return novo;
+
+}
+
+void sort_no_interno(int d, TNoInterno *node){
+    int min;
+    int aux;
+    for (int i=0; i< node->m-1; i++){
+        min = i;
+        for (int j=(i+1); j<node->m; j++){
+            if (node->chaves[j] < node->chaves[min]){
+                min = j;
+            }
+        }
+        if (node->chaves[min]!=node->chaves[i]){
+            aux = node->chaves[i];
+            node->chaves[i] = node->chaves[min];
+            node->chaves[min] = aux;
+
+            //acerta os ponteiros
+            int aux_pont = node->p[i+1];
+            node->p[i+1] = node->p[min+1];
+            node->p[min+1] = aux_pont;
+        }
+    }
+
+}
+
+//funcoes da arvore b+
 int busca(int cod, char *nome_arquivo_metadados, char *nome_arquivo_indice, char *nome_arquivo_dados, int d)
 {
     //TODO: Inserir aqui o codigo do algoritmo
@@ -110,28 +148,86 @@ int insere(int cod, char *nome, char *categoria, float preco, char *nome_arquivo
     fseek(dados_file, folha_ptr, SEEK_SET);
     TNoFolha* folha_node = le_no_folha(d, dados_file);
 
+    int inserido_ptr;
     int taNaArvore = 0;
     for (int i=0; i<folha_node->m; i++){
         if (folha_node->pizzas[i]->cod==cod) taNaArvore=1;
     }
+    //se ja existir esse codigo, retorna -1
     if (taNaArvore) return -1;
     else {
-        //pode inserir na folha sem problemas
+        //tem espaço para inserir na folha
         if (folha_node->m < 2 * d) {
-            //inserir nova folha na posicao correta e dar shift right no resto{
+            //insere a informacao na ultima posicao da folha e ordena
             folha_node->pizzas[folha_node->m] = nova_pizza;
             folha_node->m += 1;
-            sort_no(folha_node);
+            sort_no_folha(folha_node);
 
             //sobrescreve a folha
             fseek(dados_file, folha_ptr, SEEK_SET);
             salva_no_folha(d, folha_node, dados_file);
-            fclose(dados_file);
-            return folha_ptr;
+            inserido_ptr = folha_ptr;
+            //fclose(dados_file);
+            //return folha_ptr;
         }
-        //caso folha esteja cheia, particionar
+        //caso a folha esteja cheia, particionar
+        else {
+            int cod_indice;
+            cod_indice = folha_node->pizzas[0]->cod;
+            folha_node->pizzas[folha_node->m] = nova_pizza;
+            folha_node->m += 1;
+            sort_no_folha(folha_node);
+            TNoFolha *novoNo = particiona_folha(d, folha_node);
+            int pont_new;
+            //pega a posicao que vai entrar o novo no
+            fseek(dados_file, 0, SEEK_END);
+            pont_new = ftell(dados_file);
+            //salva o no novo
+            novoNo->pont_prox = folha_node->pont_prox;
+            folha_node->pont_prox = pont_new;
+            salva_no_folha(d, novoNo, dados_file);
+            //subscreve o no antigo
+            fseek(dados_file, folha_ptr, SEEK_SET);
+            salva_no_folha(d, folha_node, dados_file);
+
+
+            //se o primeiro nó continuar sendo a chave, cria uma nova chave para inserir no no interno
+            fseek(indice_file, folha_node->pont_pai, SEEK_SET);
+            TNoInterno *in_node = le_no_interno(d, indice_file);
+            //se o no nao estiver cheio
+            if (folha_node->pont_pai != -1) {
+                if (in_node->m < 2 * d) {
+                    //se o primeiro no da folha nao tiver mudado
+                    if (folha_node->pizzas[0]->cod == cod_indice) {
+                        in_node->chaves[in_node->m] = novoNo->pizzas[0]->cod;
+                        in_node->p[in_node->m + 1] = pont_new;
+                        in_node->m+=1;
+                        sort_no_interno(d, in_node);
+
+                        int tanonovo = 0;
+                        for (int i = 0; i < novoNo->m; i++) {
+                            if (novoNo->pizzas[i]->cod == cod) {
+                                tanonovo = 1;
+                                break;
+                            }
+                        }
+                        if (tanonovo) inserido_ptr = pont_new;
+                        else inserido_ptr = folha_ptr;
+
+                        //atualiza os indices
+                        fseek(indice_file, folha_node->pont_pai, SEEK_SET);
+                        salva_no_interno(d, in_node, indice_file);
+
+                        //atualiza os metadados
+                        fseek(dados_file, 0, SEEK_END);
+                        meta->pont_prox_no_folha_livre = ftell(dados_file);
+                        fseek(metadados_file, 0, SEEK_SET);
+                        salva_metadados(meta, metadados_file);
+                    }
+                }
+            }
+        }
         /*
-        //nova folha terão d+1 dados
         int new_size = d+1;
         TNoFolha* nova_folha_node = cria_no_folha(d, folha_node->pont_pai, folha_node->pont_prox, new_size, nova_pizza);
 
@@ -209,6 +305,10 @@ int insere(int cod, char *nome, char *categoria, float preco, char *nome_arquivo
         fclose(indice_file);
         return final_ptr;
         */
+        fclose(indice_file);
+        fclose(dados_file);
+        fclose(metadados_file);
+        return inserido_ptr;
     }
 }
 
@@ -253,3 +353,5 @@ void carrega_dados(int d, char *nome_arquivo_entrada, char *nome_arquivo_metadad
 
     //TODO: Implementar essa funcao
 }
+
+
