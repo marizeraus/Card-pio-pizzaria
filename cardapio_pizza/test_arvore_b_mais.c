@@ -646,6 +646,7 @@ BEGIN_TESTS();
         libera_nos_folhas(D, tabDadosSaida);
     }
 
+
     TEST("Insercao 6 em arvore de altura H = 2 completa. Folha esta cheia, raiz tambem");
     if (!skip) {
         int pont = INT_MAX;
@@ -823,7 +824,6 @@ BEGIN_TESTS();
         );
 
         TListaNosFolhas *tabDadosSaida = le_nos_folhas(D, NOME_ARQUIVO_DADOS);
-
         ASSERT_EQUAL_CMP(D, tabDados, tabDadosSaida, cmp_nos_folhas);
         libera_nos_folhas(D, tabDados);
         libera_nos_folhas(D, tabDadosSaida);
